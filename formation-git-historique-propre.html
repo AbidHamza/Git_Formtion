@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git — Historique propre avant PR</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e8e8e8;
+      line-height: 1.5;
+      font-size: clamp(14px, 2.2vw, 20px);
+    }
+    .deck {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    .slide {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 2rem 3rem;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .slide.active {
+      display: flex;
+    }
+    .slide h1 { font-size: 1.8em; margin: 0 0 0.5em; color: #a8d8ea; }
+    .slide h2 { font-size: 1.3em; margin: 0.5em 0 0.4em; color: #aa96da; }
+    .slide h3 { font-size: 1.1em; margin: 0.8em 0 0.3em; color: #a8d8ea; }
+    .slide p { margin: 0.4em 0; }
+    .phrase { font-style: italic; color: #c9c9c9; margin: 0.6em 0; }
+    .cmd { font-family: 'Consolas', 'Monaco', monospace; background: #16213e; padding: 0.2em 0.5em; border-radius: 4px; margin: 0.1em 0; display: inline-block; font-size: 0.95em; }
+    .terminal {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: #0f0f1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+      margin: 0.5em 0;
+      font-size: 0.85em;
+      overflow-x: auto;
+    }
+    .terminal .prompt { color: #7ec850; }
+    .terminal .out { color: #e8e8e8; }
+    .terminal .branch { color: #f39c12; }
+    .terminal .file { color: #3498db; }
+    .terminal .new { color: #2ecc71; }
+    .terminal .modified { color: #e74c3c; }
+    .diagram { margin: 0.6em 0; text-align: center; }
+    .diagram svg { max-width: 100%; height: auto; }
+    ul, ol { margin: 0.3em 0; padding-left: 1.4em; }
+    li { margin: 0.2em 0; }
+    .rule { border-left: 3px solid #aa96da; padding-left: 1em; margin: 0.4em 0; }
+    .nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 48px;
+      background: #16213e;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem;
+      z-index: 100;
+    }
+    .nav button {
+      background: #2d2d44;
+      color: #e8e8e8;
+      border: 1px solid #555;
+      padding: 0.4rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+    }
+    .nav button:hover { background: #3d3d54; }
+    .nav button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .slide-num { color: #999; font-size: 0.9em; }
+    .atelier-badge { display: inline-block; background: #aa96da; color: #1a1a2e; padding: 0.2em 0.5em; border-radius: 4px; font-size: 0.85em; margin-bottom: 0.4em; }
+  </style>
+</head>
+<body>
+
+<div class="deck">
+
+  <!-- SLIDE 1 : Titre -->
+  <section class="slide active" data-slide="1">
+    <h1>Git — Historique propre avant PR</h1>
+    <p>Tech Lead · Repo local uniquement</p>
+    <p class="phrase">« L’objectif de cette session : tu repartiras avec des réflexes précis pour nettoyer ton historique local avant de pousser ou d’ouvrir une PR. On reste en local, pas de conflits. »</p>
+  </section>
+
+  <!-- SLIDE 2 : Les trois zones -->
+  <section class="slide" data-slide="2">
+    <h2>Les trois zones à garder en tête</h2>
+    <p>Chaque fichier vit dans une de ces zones. Les commandes déplacent des contenus entre elles.</p>
+    <p class="phrase">« Avant d’attaquer amend ou reset, on fixe le modèle mental : working tree, staging, history. »</p>
+    <div class="diagram">
+      <svg viewBox="0 0 540 220" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#7ec850"/></marker>
+          <linearGradient id="wt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d3d5c"/><stop offset="1" stop-color="#2d2d44"/></linearGradient>
+          <linearGradient id="st" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d3d5c"/><stop offset="1" stop-color="#2d2d44"/></linearGradient>
+          <linearGradient id="hi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d3d5c"/><stop offset="1" stop-color="#2d2d44"/></linearGradient>
+        </defs>
+        <rect x="15" y="25" width="150" height="140" fill="url(#wt)" stroke="#555" stroke-width="2" rx="6"/>
+        <text x="90" y="55" text-anchor="middle" fill="#a8d8ea" font-size="14" font-weight="bold">Working tree</text>
+        <text x="90" y="78" text-anchor="middle" fill="#999" font-size="11">(répertoire de travail)</text>
+        <rect x="35" y="88" width="110" height="22" fill="#1a1a2e" rx="2" stroke="#555"/>
+        <text x="90" y="103" text-anchor="middle" fill="#999" font-size="10">fichiers modifiés</text>
+        <text x="90" y="120" text-anchor="middle" fill="#999" font-size="10">non stagés</text>
+        <text x="90" y="155" text-anchor="middle" fill="#7ec850" font-size="10">git add ←</text>
+        <path d="M 165 95 L 195 95" stroke="#7ec850" stroke-width="2.5" fill="none" marker-end="url(#arr2)"/>
+        <rect x="185" y="25" width="150" height="140" fill="url(#st)" stroke="#555" stroke-width="2" rx="6"/>
+        <text x="260" y="55" text-anchor="middle" fill="#a8d8ea" font-size="14" font-weight="bold">Staging</text>
+        <text x="260" y="78" text-anchor="middle" fill="#999" font-size="11">(index)</text>
+        <rect x="205" y="88" width="110" height="22" fill="#1a1a2e" rx="2" stroke="#555"/>
+        <text x="260" y="103" text-anchor="middle" fill="#999" font-size="10">prêt à committer</text>
+        <text x="260" y="155" text-anchor="middle" fill="#7ec850" font-size="10">git commit ←</text>
+        <path d="M 335 95 L 365 95" stroke="#7ec850" stroke-width="2.5" fill="none" marker-end="url(#arr2)"/>
+        <rect x="355" y="25" width="150" height="140" fill="url(#hi)" stroke="#555" stroke-width="2" rx="6"/>
+        <text x="430" y="55" text-anchor="middle" fill="#a8d8ea" font-size="14" font-weight="bold">History</text>
+        <text x="430" y="78" text-anchor="middle" fill="#999" font-size="11">(commits)</text>
+        <circle cx="400" cy="100" r="18" fill="#2d2d44" stroke="#555"/>
+        <circle cx="430" cy="100" r="18" fill="#2d2d44" stroke="#555"/>
+        <circle cx="460" cy="100" r="18" fill="#3498db" stroke="#7ec850"/>
+        <text x="430" y="140" text-anchor="middle" fill="#999" font-size="10">immutables*</text>
+        <text x="260" y="200" fill="#aa96da" font-size="11">Flux normal : working tree → add → staging → commit → history</text>
+      </svg>
+    </div>
+    <p class="rule">* Immutables tant qu’on ne réécrit pas l’historique (rebase, reset, amend).</p>
+  </section>
+
+  <!-- SLIDE 3 : git status / git log -->
+  <section class="slide" data-slide="3">
+    <h2>Lire l’état : status et log</h2>
+    <p>status = working tree + staging ; log = historique des commits.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 480 100" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="15" width="200" height="70" fill="#2d2d44" stroke="#555" rx="4"/>
+        <text x="120" y="42" text-anchor="middle" fill="#a8d8ea" font-size="13">git status</text>
+        <text x="120" y="58" text-anchor="middle" fill="#999" font-size="11">lit Working tree</text>
+        <text x="120" y="72" text-anchor="middle" fill="#999" font-size="11">+ Staging</text>
+        <path d="M 240 50 L 260 50" stroke="#555" stroke-width="1"/>
+        <rect x="260" y="15" width="200" height="70" fill="#2d2d44" stroke="#555" rx="4"/>
+        <text x="360" y="42" text-anchor="middle" fill="#a8d8ea" font-size="13">git log</text>
+        <text x="360" y="58" text-anchor="middle" fill="#999" font-size="11">lit History</text>
+        <text x="360" y="72" text-anchor="middle" fill="#999" font-size="11">(chaîne de commits)</text>
+        <text x="240" y="98" text-anchor="middle" fill="#aa96da" font-size="10">Deux commandes, deux zones différentes</text>
+      </svg>
+    </div>
+    <p class="phrase">« Tu dois pouvoir interpréter ces deux sorties en deux secondes. »</p>
+    <div class="terminal">
+      <div><span class="prompt">$</span> git status</div>
+      <div class="out">On branch <span class="branch">main</span></div>
+      <div class="out">Changes to be committed: (use "git restore --staged &lt;file&gt;..." to unstage)</div>
+      <div class="out">  <span class="modified">modified:   src/api.py</span></div>
+      <div class="out">Changes not staged for commit:</div>
+      <div class="out">  <span class="modified">modified:   tests/test_api.py</span></div>
+      <div class="out">Untracked files: <span class="new">docs/notes.txt</span></div>
+    </div>
+    <div class="terminal">
+      <div><span class="prompt">$</span> git log --oneline --graph -6</div>
+      <div class="out">* a1b2c3d (HEAD -&gt; main) fix typo in readme</div>
+      <div class="out">* e4f5g6h add validation</div>
+      <div class="out">* i7j8k9l wip</div>
+      <div class="out">* m0n1o2p init</div>
+    </div>
+    <p><span class="cmd">git log --oneline --graph</span> : vue synthétique. HEAD indique où tu es.</p>
+  </section>
+
+  <!-- SLIDE 4 : Pourquoi nettoyer -->
+  <section class="slide" data-slide="4">
+    <h2>Pourquoi nettoyer l’historique avant la PR</h2>
+    <p>Un historique propre facilite la review, le bisect et la compréhension future.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 500 130" xmlns="http://www.w3.org/2000/svg">
+        <text x="120" y="22" fill="#e74c3c" font-size="12" font-weight="bold">Historique sale (à éviter en PR)</text>
+        <rect x="20" y="28" width="220" height="52" fill="#2d2d44" stroke="#e74c3c" rx="4" stroke-width="1"/>
+        <text x="130" y="48" text-anchor="middle" fill="#999" font-size="10">oups · fix typo · fix · wip · add file · fix · wip · init</text>
+        <text x="130" y="62" text-anchor="middle" fill="#999" font-size="10">Messages peu clairs, redondants</text>
+        <text x="130" y="75" text-anchor="middle" fill="#e74c3c" font-size="9">→ review difficile, bisect pénible</text>
+        <path d="M 260 54 L 280 54" stroke="#555" stroke-width="1"/>
+        <text x="270" y="48" fill="#7ec850" font-size="11">nettoyer</text>
+        <text x="380" y="22" fill="#7ec850" font-size="12" font-weight="bold">Historique propre</text>
+        <rect x="290" y="28" width="200" height="52" fill="#2d2d44" stroke="#7ec850" rx="4" stroke-width="1"/>
+        <text x="390" y="48" text-anchor="middle" fill="#999" font-size="10">add main module · init</text>
+        <text x="390" y="62" text-anchor="middle" fill="#999" font-size="10">Une intention par commit</text>
+        <text x="390" y="75" text-anchor="middle" fill="#7ec850" font-size="9">→ review ciblée, bisect utile</text>
+        <text x="250" y="110" text-anchor="middle" fill="#aa96da" font-size="10">Nettoyage en local avant push = pas d’impact pour les autres</text>
+      </svg>
+    </div>
+    <ul>
+      <li>Review : un commit = une intention. Plus c’est granulaire et nommé, plus la review est ciblée.</li>
+      <li>Bisect : Git peut retrouver le commit qui a introduit un bug. Un historique bruité rend ça pénible.</li>
+      <li>Convention : en équipe, un historique lisible devient la norme.</li>
+    </ul>
+    <p class="rule">On nettoie en local, avant le push. Une fois poussé, on évite de réécrire sans accord.</p>
+  </section>
+
+  <!-- SLIDE 5 : commit --amend -->
+  <section class="slide" data-slide="5">
+    <h2>git commit --amend</h2>
+    <p>Modifie le dernier commit (message ou contenu). Le commit est remplacé par un nouveau ; le hash change.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 460 90" xmlns="http://www.w3.org/2000/svg">
+        <text x="90" y="22" fill="#999" font-size="11">Avant</text>
+        <circle cx="90" cy="48" r="20" fill="#2d2d44" stroke="#555"/>
+        <text x="90" y="52" text-anchor="middle" fill="#e8e8e8" font-size="10">A</text>
+        <line x1="90" y1="68" x2="90" y2="88" stroke="#555" stroke-width="1.5"/>
+        <circle cx="90" cy="78" r="20" fill="#2d2d44" stroke="#f39c12"/>
+        <text x="90" y="82" text-anchor="middle" fill="#e8e8e8" font-size="10">B</text>
+        <text x="90" y="88" text-anchor="middle" fill="#7ec850" font-size="9">HEAD</text>
+        <text x="170" y="55" fill="#7ec850" font-size="12">--amend</text>
+        <path d="M 200 55 L 240 55" stroke="#7ec850" stroke-width="2" fill="none" marker-end="url(#a5)"/>
+        <defs><marker id="a5" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#7ec850"/></marker></defs>
+        <text x="340" y="22" fill="#999" font-size="11">Après</text>
+        <circle cx="340" cy="48" r="20" fill="#2d2d44" stroke="#555"/>
+        <text x="340" y="52" text-anchor="middle" fill="#e8e8e8" font-size="10">A</text>
+        <line x1="340" y1="48" x2="340" y2="68" stroke="#555" stroke-width="1.5"/>
+        <circle cx="340" cy="78" r="20" fill="#3498db" stroke="#7ec850" stroke-width="2"/>
+        <text x="340" y="82" text-anchor="middle" fill="#e8e8e8" font-size="10">B'</text>
+        <text x="340" y="88" text-anchor="middle" fill="#7ec850" font-size="9">HEAD</text>
+        <text x="260" y="88" text-anchor="middle" fill="#aa96da" font-size="9">B disparaît de la branche (reste en reflog)</text>
+      </svg>
+    </div>
+    <p class="phrase">« Amend, c’est "le dernier commit ne me convient pas, je le refais en un seul bloc". »</p>
+    <p>Cas d’usage : oubli d’un fichier, faute dans le message. <span class="cmd">git add …</span> puis <span class="cmd">git commit --amend --no-edit</span> ou <span class="cmd">git commit --amend -m "Nouveau message"</span>.</p>
+  </section>
+
+  <!-- SLIDE 6 : Schéma amend -->
+  <section class="slide" data-slide="6">
+    <h2>Effet de commit --amend</h2>
+    <p>Avant : un commit avec un hash. Après : un nouveau commit (nouveau hash) ; l’ancien n’est plus référencé par la branche.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 500 230" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="5" width="220" height="205" fill="#1a1a2e" stroke="#555" rx="4"/>
+        <text x="120" y="28" fill="#a8d8ea" font-size="13" font-weight="bold">Avant amend</text>
+        <circle cx="120" cy="65" r="26" fill="#2d2d44" stroke="#555"/>
+        <text x="120" y="69" text-anchor="middle" fill="#e8e8e8" font-size="11">A</text>
+        <text x="120" y="82" text-anchor="middle" fill="#999" font-size="9">abc123</text>
+        <line x1="120" y1="91" x2="120" y2="105" stroke="#555" stroke-width="2"/>
+        <circle cx="120" cy="125" r="26" fill="#2d2d44" stroke="#f39c12"/>
+        <text x="120" y="129" text-anchor="middle" fill="#e8e8e8" font-size="11">B</text>
+        <text x="120" y="142" text-anchor="middle" fill="#999" font-size="9">def456</text>
+        <text x="120" y="165" fill="#7ec850" font-size="11">main → B, HEAD → B</text>
+        <text x="120" y="195" fill="#aa96da" font-size="9">B = dernier commit</text>
+        <path d="M 230 115 L 270 115" stroke="#7ec850" stroke-width="2" marker-end="url(#arr6)"/>
+        <defs><marker id="arr6" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#7ec850"/></marker></defs>
+        <text x="250" y="108" fill="#7ec850" font-size="11">amend</text>
+        <rect x="270" y="5" width="220" height="205" fill="#1a1a2e" stroke="#555" rx="4"/>
+        <text x="380" y="28" fill="#a8d8ea" font-size="13" font-weight="bold">Après amend</text>
+        <circle cx="380" cy="65" r="26" fill="#2d2d44" stroke="#555"/>
+        <text x="380" y="69" text-anchor="middle" fill="#e8e8e8" font-size="11">A</text>
+        <text x="380" y="82" text-anchor="middle" fill="#999" font-size="9">abc123 (inchangé)</text>
+        <line x1="380" y1="91" x2="380" y2="105" stroke="#555" stroke-width="2"/>
+        <circle cx="380" cy="125" r="26" fill="#3498db" stroke="#7ec850" stroke-width="2"/>
+        <text x="380" y="129" text-anchor="middle" fill="#e8e8e8" font-size="11">B'</text>
+        <text x="380" y="142" text-anchor="middle" fill="#999" font-size="9">xyz789 (nouveau hash)</text>
+        <text x="380" y="165" fill="#7ec850" font-size="11">main → B', HEAD → B'</text>
+        <text x="380" y="185" fill="#e74c3c" font-size="9">def456 orphelin</text>
+        <text x="380" y="198" fill="#aa96da" font-size="9">(toujours en reflog)</text>
+      </svg>
+    </div>
+    <p class="phrase">« L’ancien commit existe encore un temps dans le reflog. C’est ton filet de sécurité. »</p>
+  </section>
+
+  <!-- SLIDE 7 : rebase interactif -->
+  <section class="slide" data-slide="7">
+    <h2>git rebase -i (interactif)</h2>
+    <p>Réécrire une suite de commits : réordonner, fusionner, renommer, supprimer.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 520 165" xmlns="http://www.w3.org/2000/svg">
+        <text x="260" y="18" text-anchor="middle" fill="#aa96da" font-size="11">git rebase -i HEAD~3 ouvre l’éditeur avec une action par commit</text>
+        <rect x="30" y="28" width="460" height="95" fill="#0f0f1a" stroke="#555" rx="4"/>
+        <text x="50" y="52" fill="#7ec850" font-size="11">pick</text>
+        <text x="100" y="52" fill="#e8e8e8" font-size="11">a1b2c3d</text>
+        <text x="220" y="52" fill="#999" font-size="11">Premier commit (garder tel quel)</text>
+        <text x="50" y="72" fill="#f39c12" font-size="11">reword</text>
+        <text x="120" y="72" fill="#e8e8e8" font-size="11">d4e5f6g</text>
+        <text x="240" y="72" fill="#999" font-size="11">Changer le message</text>
+        <text x="50" y="92" fill="#3498db" font-size="11">squash</text>
+        <text x="115" y="92" fill="#e8e8e8" font-size="11">h7i8j9k</text>
+        <text x="235" y="92" fill="#999" font-size="11">Fusionner avec le commit au-dessus</text>
+        <text x="50" y="112" fill="#e74c3c" font-size="11">drop</text>
+        <text x="95" y="112" fill="#999" font-size="11">= supprimer ce commit (et ses changements)</text>
+        <text x="260" y="148" text-anchor="middle" fill="#999" font-size="10">pick (p) · reword (r) · squash (s) · fixup (f) · drop (d)</text>
+      </svg>
+    </div>
+    <p class="phrase">« Rebase -i, c’est le couteau suisse pour "ces N derniers commits, je veux les retravailler". »</p>
+    <p><span class="cmd">git rebase -i HEAD~3</span> : les 3 derniers commits. Tu modifies la première colonne (action), tu sauvegardes, Git rejoue les commits.</p>
+  </section>
+
+  <!-- SLIDE 8 : Schéma rebase -i -->
+  <section class="slide" data-slide="8">
+    <h2>Avant / après rebase -i (squash)</h2>
+    <p>Exemple : squash des deux derniers dans un seul. L’historique linéaire est réécrit.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 520 245" xmlns="http://www.w3.org/2000/svg">
+        <rect x="15" y="5" width="230" height="225" fill="#1a1a2e" stroke="#555" rx="4"/>
+        <text x="130" y="28" fill="#a8d8ea" font-size="12" font-weight="bold">Avant rebase -i HEAD~3</text>
+        <circle cx="130" cy="58" r="24" fill="#2d2d44" stroke="#555"/>
+        <text x="130" y="62" text-anchor="middle" fill="#e8e8e8" font-size="11">A</text>
+        <line x1="130" y1="82" x2="130" y2="98" stroke="#555" stroke-width="2"/>
+        <circle cx="130" cy="113" r="24" fill="#2d2d44" stroke="#555"/>
+        <text x="130" y="117" text-anchor="middle" fill="#e8e8e8" font-size="11">B</text>
+        <line x1="130" y1="137" x2="130" y2="153" stroke="#555" stroke-width="2"/>
+        <circle cx="130" cy="168" r="24" fill="#2d2d44" stroke="#f39c12"/>
+        <text x="130" y="172" text-anchor="middle" fill="#e8e8e8" font-size="11">C</text>
+        <text x="130" y="198" text-anchor="middle" fill="#7ec850" font-size="10">HEAD</text>
+        <text x="130" y="218" text-anchor="middle" fill="#aa96da" font-size="9">3 commits : A, B, C</text>
+        <path d="M 245 115 L 275 115" stroke="#7ec850" stroke-width="2" fill="none" marker-end="url(#arr8)"/>
+        <defs><marker id="arr8" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#7ec850"/></marker></defs>
+        <text x="260" y="108" fill="#7ec850" font-size="10">squash B+C</text>
+        <rect x="275" y="5" width="230" height="225" fill="#1a1a2e" stroke="#555" rx="4"/>
+        <text x="390" y="28" fill="#a8d8ea" font-size="12" font-weight="bold">Après squash B et C</text>
+        <circle cx="390" cy="58" r="24" fill="#2d2d44" stroke="#555"/>
+        <text x="390" y="62" text-anchor="middle" fill="#e8e8e8" font-size="11">A</text>
+        <line x1="390" y1="82" x2="390" y2="128" stroke="#555" stroke-width="2"/>
+        <circle cx="390" cy="148" r="28" fill="#3498db" stroke="#7ec850" stroke-width="2"/>
+        <text x="390" y="152" text-anchor="middle" fill="#e8e8e8" font-size="11">B'+C'</text>
+        <text x="390" y="165" text-anchor="middle" fill="#999" font-size="9">(1 commit fusionné)</text>
+        <text x="390" y="198" text-anchor="middle" fill="#7ec850" font-size="10">HEAD</text>
+        <text x="390" y="218" text-anchor="middle" fill="#e74c3c" font-size="9">B et C orphelins (reflog)</text>
+      </svg>
+    </div>
+    <p class="phrase">« Après un rebase, les anciens commits ne sont plus sur la branche ; ils restent un temps en reflog. »</p>
+  </section>
+
+  <!-- SLIDE 9 : reset -->
+  <section class="slide" data-slide="9">
+    <h2>git reset : soft, mixed, hard</h2>
+    <p>Déplacer la branche (HEAD) vers un commit donné. La différence : où vont les changements.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 500 115" xmlns="http://www.w3.org/2000/svg">
+        <text x="250" y="20" text-anchor="middle" fill="#aa96da" font-size="11">Reset = déplacer HEAD (et la branche) vers un commit ; le contenu des commits « dépassés » va quelque part</text>
+        <rect x="20" y="32" width="140" height="72" fill="#2d2d44" stroke="#7ec850" rx="4"/>
+        <text x="90" y="52" text-anchor="middle" fill="#a8d8ea" font-size="12">--soft</text>
+        <text x="90" y="68" text-anchor="middle" fill="#999" font-size="10">Changements →</text>
+        <text x="90" y="82" text-anchor="middle" fill="#7ec850" font-size="10">staging</text>
+        <text x="90" y="98" text-anchor="middle" fill="#999" font-size="9">(aucune perte)</text>
+        <rect x="180" y="32" width="140" height="72" fill="#2d2d44" stroke="#f39c12" rx="4"/>
+        <text x="250" y="52" text-anchor="middle" fill="#a8d8ea" font-size="12">--mixed</text>
+        <text x="250" y="68" text-anchor="middle" fill="#999" font-size="10">Changements →</text>
+        <text x="250" y="82" text-anchor="middle" fill="#f39c12" font-size="10">working tree</text>
+        <text x="250" y="98" text-anchor="middle" fill="#999" font-size="9">(défaut)</text>
+        <rect x="340" y="32" width="140" height="72" fill="#2d2d44" stroke="#e74c3c" rx="4"/>
+        <text x="410" y="52" text-anchor="middle" fill="#a8d8ea" font-size="12">--hard</text>
+        <text x="410" y="68" text-anchor="middle" fill="#999" font-size="10">Changements</text>
+        <text x="410" y="82" text-anchor="middle" fill="#e74c3c" font-size="10">supprimés des fichiers</text>
+        <text x="410" y="98" text-anchor="middle" fill="#999" font-size="9">(reflog pour récupérer)</text>
+      </svg>
+    </div>
+    <p class="phrase">« Reset décroche la branche et la recroche ailleurs. Les fichiers suivent selon le mode. »</p>
+    <ul>
+      <li><span class="cmd">git reset --soft &lt;commit&gt;</span> : changements restent en staging. Aucune perte de code.</li>
+      <li><span class="cmd">git reset --mixed &lt;commit&gt;</span> (défaut) : changements en working tree, pas en staging.</li>
+      <li><span class="cmd">git reset --hard &lt;commit&gt;</span> : working tree et staging alignés sur &lt;commit&gt;. Changements "passés" plus dans les fichiers (reflog seulement).</li>
+    </ul>
+  </section>
+
+  <!-- SLIDE 10 : Schéma reset -->
+  <section class="slide" data-slide="10">
+    <h2>Effet des reset (exemple : reset vers A)</h2>
+    <p>État initial : A ← B ← C (HEAD). On fait <span class="cmd">git reset &lt;A&gt;</span> avec soft, mixed ou hard.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 560 275" xmlns="http://www.w3.org/2000/svg">
+        <text x="90" y="18" text-anchor="middle" fill="#999" font-size="10">Initial : HEAD sur C</text>
+        <circle cx="90" cy="45" r="18" fill="#2d2d44" stroke="#555"/>
+        <text x="90" y="49" text-anchor="middle" fill="#e8e8e8" font-size="9">A</text>
+        <line x1="90" y1="63" x2="90" y2="78" stroke="#555" stroke-width="1.5"/>
+        <circle cx="90" cy="88" r="18" fill="#2d2d44" stroke="#555"/>
+        <text x="90" y="92" text-anchor="middle" fill="#e8e8e8" font-size="9">B</text>
+        <line x1="90" y1="106" x2="90" y2="121" stroke="#555" stroke-width="1.5"/>
+        <circle cx="90" cy="131" r="18" fill="#e74c3c" stroke="#fff" stroke-width="1"/>
+        <text x="90" y="135" text-anchor="middle" fill="#fff" font-size="9">C</text>
+        <text x="90" y="155" text-anchor="middle" fill="#7ec850" font-size="9">HEAD</text>
+        <text x="180" y="18" text-anchor="middle" fill="#7ec850" font-size="10">--soft</text>
+        <circle cx="180" cy="55" r="20" fill="#7ec850" stroke="#fff" stroke-width="1"/>
+        <text x="180" y="59" text-anchor="middle" fill="#000" font-size="9">A HEAD</text>
+        <rect x="162" y="78" width="36" height="38" fill="#2d2d44" stroke="#555" rx="2"/>
+        <text x="180" y="92" text-anchor="middle" fill="#999" font-size="8">staging</text>
+        <text x="180" y="105" text-anchor="middle" fill="#7ec850" font-size="8">B+C ici</text>
+        <text x="180" y="125" text-anchor="middle" fill="#999" font-size="8">(aucune perte)</text>
+        <text x="300" y="18" text-anchor="middle" fill="#f39c12" font-size="10">--mixed</text>
+        <circle cx="300" cy="55" r="20" fill="#7ec850" stroke="#fff" stroke-width="1"/>
+        <text x="300" y="59" text-anchor="middle" fill="#000" font-size="9">A HEAD</text>
+        <rect x="282" y="78" width="36" height="38" fill="#2d2d44" stroke="#555" rx="2"/>
+        <text x="300" y="92" text-anchor="middle" fill="#999" font-size="8">working</text>
+        <text x="300" y="105" text-anchor="middle" fill="#f39c12" font-size="8">B+C ici</text>
+        <text x="300" y="125" text-anchor="middle" fill="#999" font-size="8">(pas en staging)</text>
+        <text x="420" y="18" text-anchor="middle" fill="#e74c3c" font-size="10">--hard</text>
+        <circle cx="420" cy="55" r="20" fill="#7ec850" stroke="#fff" stroke-width="1"/>
+        <text x="420" y="59" text-anchor="middle" fill="#000" font-size="9">A HEAD</text>
+        <text x="420" y="88" text-anchor="middle" fill="#e74c3c" font-size="9">B+C supprimés</text>
+        <text x="420" y="102" text-anchor="middle" fill="#999" font-size="8">des fichiers</text>
+        <text x="420" y="120" text-anchor="middle" fill="#aa96da" font-size="8">reflog pour</text>
+        <text x="420" y="132" text-anchor="middle" fill="#aa96da" font-size="8">récupérer</text>
+        <text x="280" y="265" text-anchor="middle" fill="#aa96da" font-size="10">La branche pointe toujours sur A ; la différence = où sont les changements de B et C</text>
+      </svg>
+    </div>
+    <p class="rule">--hard supprime les changements des commits "passés" des fichiers. Reflog permet de retrouver le commit perdu.</p>
+  </section>
+
+  <!-- SLIDE 11 : cherry-pick -->
+  <section class="slide" data-slide="11">
+    <h2>git cherry-pick</h2>
+    <p>Appliquer les changements d’un (ou plusieurs) commit(s) ailleurs, en créant de nouveaux commits.</p>
+    <p class="phrase">« Cherry-pick, c’est "je veux ce commit ici, pas toute l’histoire". Tu copies l’effet du commit, pas le commit lui-même. »</p>
+    <p><span class="cmd">git cherry-pick &lt;hash&gt;</span> : nouveau commit sur la branche courante avec le même diff.</p>
+    <p><span class="cmd">git cherry-pick A B C</span> : applique A, puis B, puis C (ordre des arguments).</p>
+    <p>Limite : si le contexte a beaucoup changé, conflits possibles. Hors scope de cet atelier.</p>
+  </section>
+
+  <!-- SLIDE 12 : reflog -->
+  <section class="slide" data-slide="12">
+    <h2>git reflog : filet de sécurité</h2>
+    <p>Le reflog enregistre où HEAD a pointé. Même après reset --hard ou rebase, les anciens commits restent repérables un temps.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 520 150" xmlns="http://www.w3.org/2000/svg">
+        <text x="260" y="22" text-anchor="middle" fill="#aa96da" font-size="11">git reflog = journal des déplacements de HEAD (du plus récent au plus ancien)</text>
+        <rect x="20" y="32" width="480" height="88" fill="#0f0f1a" stroke="#555" rx="4"/>
+        <text x="40" y="52" fill="#7ec850" font-size="10">abc1234</text>
+        <text x="130" y="52" fill="#999" font-size="10">HEAD@{0}: commit: fix typo</text>
+        <text x="40" y="68" fill="#7ec850" font-size="10">def5678</text>
+        <text x="130" y="68" fill="#999" font-size="10">HEAD@{1}: reset: moving to HEAD~1</text>
+        <text x="40" y="84" fill="#7ec850" font-size="10">abc1234</text>
+        <text x="130" y="84" fill="#999" font-size="10">HEAD@{2}: commit (amend): fix typo</text>
+        <text x="40" y="100" fill="#7ec850" font-size="10">ghi9012</text>
+        <text x="130" y="100" fill="#999" font-size="10">HEAD@{3}: commit: oups</text>
+        <text x="260" y="128" text-anchor="middle" fill="#aa96da" font-size="10">En cas d’erreur : git reset --hard def5678 (ou le hash voulu) pour revenir à un état précédent</text>
+      </svg>
+    </div>
+    <p class="phrase">« Reflog garde une trace. Les entrées expirent (par défaut ~90 jours). Reflog est local, il ne se pousse pas. »</p>
+  </section>
+
+  <!-- SLIDE 13 : Workflow avant PR -->
+  <section class="slide" data-slide="13">
+    <h2>Workflow typique : nettoyage avant PR</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 520 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="10" width="80" height="36" fill="#2d2d44" stroke="#555" rx="4"/>
+        <text x="60" y="32" text-anchor="middle" fill="#e8e8e8" font-size="10">Travailler</text>
+        <path d="M 100 28 L 130 28" stroke="#7ec850" stroke-width="1.5" fill="none" marker-end="url(#w1)"/>
+        <defs><marker id="w1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#7ec850"/></marker></defs>
+        <rect x="130" y="10" width="80" height="36" fill="#2d2d44" stroke="#555" rx="4"/>
+        <text x="170" y="32" text-anchor="middle" fill="#e8e8e8" font-size="10">log -n 10</text>
+        <path d="M 210 28 L 240 28" stroke="#7ec850" stroke-width="1.5" fill="none" marker-end="url(#w1)"/>
+        <rect x="240" y="10" width="100" height="36" fill="#2d2d44" stroke="#aa96da" rx="4"/>
+        <text x="290" y="26" text-anchor="middle" fill="#e8e8e8" font-size="9">Dernier seul ?</text>
+        <text x="290" y="38" text-anchor="middle" fill="#aa96da" font-size="9">→ amend</text>
+        <path d="M 340 28 L 370 28" stroke="#7ec850" stroke-width="1.5" fill="none" marker-end="url(#w1)"/>
+        <rect x="370" y="10" width="130" height="36" fill="#2d2d44" stroke="#aa96da" rx="4"/>
+        <text x="435" y="26" text-anchor="middle" fill="#e8e8e8" font-size="9">Plusieurs ?</text>
+        <text x="435" y="38" text-anchor="middle" fill="#aa96da" font-size="9">→ rebase -i</text>
+        <path d="M 290 46 L 290 70" stroke="#555" stroke-width="1"/>
+        <path d="M 435 46 L 435 70" stroke="#555" stroke-width="1"/>
+        <rect x="200" y="72" width="120" height="28" fill="#2d2d44" stroke="#aa96da" rx="4"/>
+        <text x="260" y="90" text-anchor="middle" fill="#e8e8e8" font-size="9">Tout en un bloc ?</text>
+        <text x="260" y="102" text-anchor="middle" fill="#aa96da" font-size="9">→ reset --soft</text>
+        <path d="M 260 100 L 260 128" stroke="#7ec850" stroke-width="1.5" fill="none" marker-end="url(#w1)"/>
+        <rect x="200" y="128" width="120" height="32" fill="#2d2d44" stroke="#7ec850" rx="4"/>
+        <text x="260" y="148" text-anchor="middle" fill="#7ec850" font-size="10">log --graph</text>
+        <text x="260" y="162" text-anchor="middle" fill="#999" font-size="9">puis push / PR</text>
+        <text x="260" y="192" text-anchor="middle" fill="#e74c3c" font-size="10">Règle d’or : pas de réécriture après push sans accord</text>
+      </svg>
+    </div>
+    <ol>
+      <li>Travailler et committer normalement (plusieurs petits commits OK).</li>
+      <li>Avant push : <span class="cmd">git log --oneline -n 10</span>. Dernier seul → <span class="cmd">amend</span>. Plusieurs → <span class="cmd">rebase -i</span>. Tout en un → <span class="cmd">reset --soft</span>.</li>
+      <li>Vérifier : <span class="cmd">git log --oneline --graph</span>. Ensuite push (ou ouverture de la PR).</li>
+    </ol>
+    <p class="phrase">« Tant que tu n’as pas push, tu peux réécrire sans impact pour les autres. »</p>
+  </section>
+
+  <!-- SLIDE 14 : Récap -->
+  <section class="slide" data-slide="14">
+    <h2>Récap des commandes</h2>
+    <ul>
+      <li><span class="cmd">git status</span> / <span class="cmd">git log --oneline --graph</span> : lecture d’état.</li>
+      <li><span class="cmd">git commit --amend [--no-edit]</span> : modifier le dernier commit.</li>
+      <li><span class="cmd">git rebase -i HEAD~n</span> : réécrire les n derniers commits (reword, squash, drop).</li>
+      <li><span class="cmd">git reset --soft / --mixed / --hard &lt;commit&gt;</span> : déplacer la branche.</li>
+      <li><span class="cmd">git cherry-pick &lt;hash&gt;</span> : appliquer un commit ailleurs.</li>
+      <li><span class="cmd">git reflog</span> : récupération en cas d’erreur.</li>
+    </ul>
+  </section>
+
+  <!-- ========== ATELIER : intro ========== -->
+  <section class="slide" data-slide="15">
+    <span class="atelier-badge">Atelier</span>
+    <h2>Lab pratique — Objectif</h2>
+    <p>Créer un repo local, générer un historique volontairement « sale », puis le nettoyer avec amend, rebase -i et reset. Aucun conflit. Fichiers simples.</p>
+    <p class="phrase">« Tu vas reproduire les commandes sur ta machine. Si tu es bloqué, on fait un point après chaque étape. »</p>
+    <p>Deux options :</p>
+    <ul>
+      <li>Exécuter le script <strong>creer-depot-atelier.ps1</strong> (ou .sh) pour obtenir directement un repo avec l’historique sale.</li>
+      <li>Ou créer le repo à la main en suivant les slides suivantes.</li>
+    </ul>
+  </section>
+
+  <!-- ATELIER étape 1 -->
+  <section class="slide" data-slide="16">
+    <span class="atelier-badge">Atelier — Étape 1</span>
+    <h2>Créer le repo et le premier commit</h2>
+    <p>Ouvre un terminal. Choisis un répertoire (ex. Bureau).</p>
+    <div class="terminal">
+      <div><span class="prompt">$</span> mkdir git-lab-clean-history</div>
+      <div><span class="prompt">$</span> cd git-lab-clean-history</div>
+      <div><span class="prompt">$</span> git init</div>
+    </div>
+    <div class="terminal">
+      <div><span class="prompt">$</span> echo "# Mon projet" > README.md</div>
+      <div><span class="prompt">$</span> git add README.md</div>
+      <div><span class="prompt">$</span> git commit -m "init"</div>
+    </div>
+    <p>Vérification : <span class="cmd">git log --oneline</span> → un seul commit (init).</p>
+  </section>
+
+  <!-- ATELIER étape 2 -->
+  <section class="slide" data-slide="17">
+    <span class="atelier-badge">Atelier — Étape 2</span>
+    <h2>Générer un historique volontairement sale</h2>
+    <p>Exécute les commandes une par une.</p>
+    <div class="terminal">
+      <div><span class="prompt">$</span> echo "def hello(): pass" > main.py</div>
+      <div><span class="prompt">$</span> git add main.py && git commit -m "add file"</div>
+      <div><span class="prompt">$</span> echo "def hello(): return 'hi'" >> main.py</div>
+      <div><span class="prompt">$</span> git add main.py && git commit -m "wip"</div>
+      <div><span class="prompt">$</span> echo "# TODO" >> main.py</div>
+      <div><span class="prompt">$</span> git add main.py && git commit -m "fix"</div>
+      <div><span class="prompt">$</span> echo "def bye(): pass" >> main.py</div>
+      <div><span class="prompt">$</span> git add main.py && git commit -m "fix typo"</div>
+      <div><span class="prompt">$</span> echo "" >> main.py</div>
+      <div><span class="prompt">$</span> git add main.py && git commit -m "oups"</div>
+    </div>
+    <p>Vérification : <span class="cmd">git log --oneline -6</span> → oups, fix typo, fix, wip, add file, init.</p>
+  </section>
+
+  <!-- ATELIER étape 3 -->
+  <section class="slide" data-slide="18">
+    <span class="atelier-badge">Atelier — Étape 3</span>
+    <h2>Nettoyer le dernier commit (amend)</h2>
+    <p>Fusionner « oups » dans le commit précédent.</p>
+    <div class="terminal">
+      <div><span class="prompt">$</span> git reset --soft HEAD~1</div>
+      <div><span class="prompt">$</span> git status</div>
+    </div>
+    <p>Les changements sont en staging. Recommit :</p>
+    <div class="terminal">
+      <div><span class="prompt">$</span> git commit --amend --no-edit</div>
+    </div>
+    <p>Vérification : <span class="cmd">git log --oneline -5</span> → le commit « oups » a disparu.</p>
+  </section>
+
+  <!-- ATELIER étape 4 -->
+  <section class="slide" data-slide="19">
+    <span class="atelier-badge">Atelier — Étape 4</span>
+    <h2>Fusionner et renommer avec rebase -i</h2>
+    <p><span class="cmd">git rebase -i HEAD~4</span>. Dans l’éditeur, par exemple :</p>
+    <div class="terminal">
+      <div class="out">pick abc1234 add file</div>
+      <div class="out">squash def5678 wip</div>
+      <div class="out">squash ghi9012 fix</div>
+      <div class="out">reword jkl3456 fix typo</div>
+    </div>
+    <p>Sauvegarde et quitte (vim : <span class="cmd">:wq</span> ; VS Code : sauvegarder et fermer). Édite le message du commit fusionné (ex. « add main module with hello and TODO ») et le message du dernier si reword.</p>
+    <p>Vérification : <span class="cmd">git log --oneline -4</span> → moins de commits, messages clairs.</p>
+  </section>
+
+  <!-- ATELIER étape 5 -->
+  <section class="slide" data-slide="20">
+    <span class="atelier-badge">Atelier — Étape 5 (optionnel)</span>
+    <h2>Tout en un seul commit (reset --soft)</h2>
+    <p>Repère le hash du commit « init » avec <span class="cmd">git log --oneline</span>.</p>
+    <div class="terminal">
+      <div><span class="prompt">$</span> git reset --soft &lt;hash_du_commit_init&gt;</div>
+      <div><span class="prompt">$</span> git status</div>
+    </div>
+    <p>Tous les changements sont en staging. Un seul commit :</p>
+    <div class="terminal">
+      <div><span class="prompt">$</span> git commit -m "add main module: hello, bye, TODO and formatting"</div>
+    </div>
+    <p>Vérification : <span class="cmd">git log --oneline</span> → deux commits : init et le nouveau.</p>
+  </section>
+
+  <!-- ATELIER étape 6 -->
+  <section class="slide" data-slide="21">
+    <span class="atelier-badge">Atelier — Étape 6</span>
+    <h2>Vérifier le reflog</h2>
+    <div class="terminal">
+      <div><span class="prompt">$</span> git reflog</div>
+    </div>
+    <p>Tu vois les anciennes positions de HEAD (reset, rebase). En cas d’erreur : <span class="cmd">git reset --hard &lt;hash&gt;</span> pour revenir.</p>
+    <p class="rule">En cas de blocage : annuler le rebase avec <span class="cmd">git rebase --abort</span>.</p>
+  </section>
+
+  <!-- SLIDE Fin -->
+  <section class="slide" data-slide="22">
+    <h2>Suite et ressources</h2>
+    <p>Tu as maintenant les outils pour garder un historique propre avant chaque PR. En équipe, définis des règles simples (message, granularité, pas de rebase après push sans accord).</p>
+    <p class="phrase">« Les questions difficiles sont dans le doc "Questions anticipées". Tu peux t’y référer après la session. »</p>
+    <p>Support : script-formateur.md, questions-anticipees.md, regles-tech-lead-git.md, guide-cursor-pro.md, lab-pratique.md.</p>
+  </section>
+
+</div>
+
+<nav class="nav">
+  <button id="prev" aria-label="Slide précédente">Précédent</button>
+  <span class="slide-num"><span id="current">1</span> / <span id="total">22</span></span>
+  <button id="next" aria-label="Slide suivante">Suivant</button>
+</nav>
+
+<script>
+(function() {
+  var slides = document.querySelectorAll('.slide');
+  var total = slides.length;
+  var current = 0;
+
+  function show(i) {
+    if (i < 0 || i >= total) return;
+    current = i;
+    slides.forEach(function(s, j) { s.classList.toggle('active', j === current); });
+    document.getElementById('current').textContent = current + 1;
+    document.getElementById('prev').disabled = current === 0;
+    document.getElementById('next').disabled = current === total - 1;
+  }
+
+  document.getElementById('total').textContent = total;
+  document.getElementById('prev').onclick = function() { show(current - 1); };
+  document.getElementById('next').onclick = function() { show(current + 1); };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(current - 1); }
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); show(current + 1); }
+  });
+
+  show(0);
+})();
+</script>
+</body>
+</html>
